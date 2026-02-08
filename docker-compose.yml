@@ -1,0 +1,41 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: session-viewer-backend
+    volumes:
+      - ./data:/app/data
+      - ${CLAUDE_DIR:-~/.claude}:/mnt/claude:ro
+      - ${CODEX_DIR:-~/.codex}:/mnt/codex:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DATABASE_URL=sqlite+aiosqlite:///./data/sessions.db
+    networks:
+      - session-viewer
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: session-viewer-frontend
+    ports:
+      - "${PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - session-viewer
+
+networks:
+  session-viewer:
+    driver: bridge
