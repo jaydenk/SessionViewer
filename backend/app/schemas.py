@@ -160,6 +160,13 @@ class AssociatedFileResponse(AssociatedFileBase):
         from_attributes = True
 
 
+# Project schemas
+class ProjectInfo(BaseModel):
+    """Schema for project info with last activity date."""
+    project: str
+    last_activity: datetime
+
+
 # Filter schemas
 class SessionFilters(BaseModel):
     """Schema for session filtering."""

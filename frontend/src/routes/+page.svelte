@@ -110,6 +110,13 @@
 
 	onMount(() => {
 		loadSessions();
+
+		const onRefreshed = () => {
+			loadSessions();
+			if ($filters.project) loadProjectFiles($filters.project);
+		};
+		window.addEventListener('sessions-refreshed', onRefreshed);
+		return () => window.removeEventListener('sessions-refreshed', onRefreshed);
 	});
 </script>
 

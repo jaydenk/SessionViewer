@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Session, AssociatedFile
-from app.schemas import SessionsResponse, SessionListItem, SessionDetail, AssociatedFileResponse
+from app.schemas import SessionsResponse, SessionListItem, SessionDetail, AssociatedFileResponse, ProjectInfo
 
 logger = logging.getLogger(__name__)
 
@@ -112,18 +112,30 @@ async def get_session_files(
     return [AssociatedFileResponse.model_validate(f) for f in files]
 
 
-@router.get("/projects/list", response_model=list[str])
+@router.get("/projects/list", response_model=list[ProjectInfo])
 async def list_projects(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Get list of unique project paths for filtering.
+    Get list of unique project paths with last activity date.
     """
-    query = select(Session.project).distinct().where(Session.project.isnot(None))
+    query = (
+        select(
+            Session.project,
+            func.max(Session.updated_at).label("last_activity"),
+        )
+        .where(Session.project.isnot(None))
+        .group_by(Session.project)
+        .order_by(Session.project)
+    )
     result = await db.execute(query)
-    projects = [p for p in result.scalars().all() if p]
+    rows = result.all()
 
-    return sorted(projects)
+    return [
+        ProjectInfo(project=row.project, last_activity=row.last_activity)
+        for row in rows
+        if row.project
+    ]
 
 
 @router.get("/projects/{project:path}/files", response_model=list[AssociatedFileResponse])

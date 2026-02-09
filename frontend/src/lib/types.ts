@@ -67,6 +67,11 @@ export interface AssociatedFile {
 	file_path: string;
 }
 
+export interface ProjectInfo {
+	project: string;
+	last_activity: string;
+}
+
 export interface SessionFilters {
 	source: string | null;
 	project: string | null;

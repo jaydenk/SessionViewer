@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { getProjects } from '$lib/api';
+	import type { ProjectInfo } from '$lib/types';
 
 	interface Props {
 		onNavigate?: () => void;
@@ -10,35 +11,97 @@
 
 	let { onNavigate }: Props = $props();
 
-	let projects = $state<string[]>([]);
+	let projects = $state<ProjectInfo[]>([]);
 	let loading = $state(true);
 	let collapsed = $state(false);
 	let selectedProject = $state<string | null>(null);
+	let sortMode = $state<'alpha' | 'recent'>('alpha');
 
-	onMount(async () => {
+	function getProjectName(projectPath: string): string {
+		if (projectPath === '(No Project)') return 'Ungrouped';
+		const parts = projectPath.split('/');
+		return parts[parts.length - 1] || projectPath;
+	}
+
+	function getDateBucket(dateStr: string): string {
+		// API returns UTC timestamps without timezone suffix — force UTC interpretation
+		const utcStr = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : dateStr + 'Z';
+		const date = new Date(utcStr);
+		const now = new Date();
+
+		// Compare against local day boundaries
+		const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+		const yesterdayStart = new Date(todayStart.getTime() - 86_400_000);
+		const weekAgo = new Date(todayStart.getTime() - 7 * 86_400_000);
+		const monthAgo = new Date(todayStart.getTime() - 30 * 86_400_000);
+		const yearAgo = new Date(todayStart.getTime() - 365 * 86_400_000);
+
+		if (date >= todayStart) return 'Today';
+		if (date >= yesterdayStart) return 'Yesterday';
+		if (date >= weekAgo) return 'This Week';
+		if (date >= monthAgo) return 'This Month';
+		if (date >= yearAgo) return 'This Year';
+		return 'Older';
+	}
+
+	interface ProjectGroup {
+		label: string;
+		items: ProjectInfo[];
+	}
+
+	let groupedProjects = $derived.by((): ProjectGroup[] => {
+		const sorted = [...projects];
+
+		if (sortMode === 'recent') {
+			sorted.sort((a, b) => new Date(b.last_activity + 'Z').getTime() - new Date(a.last_activity + 'Z').getTime());
+			const bucketOrder = ['Today', 'Yesterday', 'This Week', 'This Month', 'This Year', 'Older'];
+			const groups = new Map<string, ProjectInfo[]>();
+			for (const item of sorted) {
+				const bucket = getDateBucket(item.last_activity);
+				if (!groups.has(bucket)) groups.set(bucket, []);
+				groups.get(bucket)!.push(item);
+			}
+			return bucketOrder
+				.filter(b => groups.has(b))
+				.map(b => ({ label: b, items: groups.get(b)! }));
+		} else {
+			sorted.sort((a, b) => a.project.localeCompare(b.project));
+			const groups = new Map<string, ProjectInfo[]>();
+			for (const item of sorted) {
+				const name = getProjectName(item.project);
+				const letter = name[0]?.toUpperCase() || '#';
+				const key = /[A-Z]/.test(letter) ? letter : '#';
+				if (!groups.has(key)) groups.set(key, []);
+				groups.get(key)!.push(item);
+			}
+			return Array.from(groups.entries()).map(([label, items]) => ({ label, items }));
+		}
+	});
+
+	async function loadProjects() {
 		try {
+			loading = true;
 			projects = await getProjects();
 		} catch (error) {
 			console.error('Failed to load projects:', error);
 		} finally {
 			loading = false;
 		}
-	});
-
-	function getProjectName(projectPath: string): string {
-		if (projectPath === '(No Project)') return 'Ungrouped';
-		// Get the last part of the path (working directory name)
-		const parts = projectPath.split('/');
-		return parts[parts.length - 1] || projectPath;
 	}
+
+	onMount(() => {
+		loadProjects();
+
+		const onRefreshed = () => loadProjects();
+		window.addEventListener('sessions-refreshed', onRefreshed);
+		return () => window.removeEventListener('sessions-refreshed', onRefreshed);
+	});
 
 	function navigateToProject(project: string) {
 		if (project === selectedProject) {
-			// Deselect - show all
 			selectedProject = null;
 			goto('/');
 		} else {
-			// Select project
 			selectedProject = project;
 			const projectParam = project === '(No Project)' ? '' : project;
 			goto(`/?project=${encodeURIComponent(projectParam)}`);
@@ -46,7 +109,6 @@
 		onNavigate?.();
 	}
 
-	// Update selected project from URL on mount and navigation
 	$effect(() => {
 		if ($page.url.searchParams.has('project')) {
 			const urlProject = $page.url.searchParams.get('project');
@@ -84,6 +146,37 @@
 		<div class="sidebar-content">
 			<div class="sidebar-header">
 				<h2>Projects</h2>
+				<div class="sort-controls">
+					<button
+						class="sort-btn"
+						class:active={sortMode === 'alpha'}
+						onclick={() => (sortMode = 'alpha')}
+						aria-label="Sort alphabetically"
+						title="Sort A-Z"
+					>
+						<!-- A-Z with arrow -->
+						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<text x="1" y="15" font-size="12" font-weight="600" fill="currentColor" stroke="none" font-family="system-ui">A</text>
+							<path d="M14 7l3-3 3 3" />
+							<path d="M17 4v16" />
+						</svg>
+					</button>
+					<button
+						class="sort-btn"
+						class:active={sortMode === 'recent'}
+						onclick={() => (sortMode = 'recent')}
+						aria-label="Sort by recent activity"
+						title="Sort by recent"
+					>
+						<!-- Clock with arrow -->
+						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<circle cx="10" cy="12" r="7" />
+							<polyline points="10 8 10 12 13 13.5" />
+							<path d="M20 7l2-3 2 3" />
+							<path d="M22 4v10" />
+						</svg>
+					</button>
+				</div>
 			</div>
 
 			<div class="projects-list">
@@ -92,21 +185,26 @@
 				{:else if projects.length === 0}
 					<div class="empty">No projects found</div>
 				{:else}
-					{#each projects as project (project)}
-						<button
-							class="project-item"
-							class:active={selectedProject === project}
-							onclick={() => navigateToProject(project)}
-						>
-							<div class="project-icon">
-								{#if project === '(No Project)'}
-									📂
-								{:else}
-									📁
-								{/if}
-							</div>
-							<div class="project-name">{getProjectName(project)}</div>
-						</button>
+					{#each groupedProjects as group (group.label)}
+						<div class="group">
+							<div class="group-heading">{group.label}</div>
+							{#each group.items as info (info.project)}
+								<button
+									class="project-item"
+									class:active={selectedProject === info.project}
+									onclick={() => navigateToProject(info.project)}
+								>
+									<div class="project-icon">
+										{#if info.project === '(No Project)'}
+											📂
+										{:else}
+											📁
+										{/if}
+									</div>
+									<div class="project-name">{getProjectName(info.project)}</div>
+								</button>
+							{/each}
+						</div>
 					{/each}
 				{/if}
 			</div>
@@ -149,7 +247,7 @@
 		background: transparent;
 		border: none;
 		color: rgb(107, 114, 128);
-		z-index: 1;
+		z-index: 2;
 		border-radius: 4px;
 		transition: all 0.15s ease;
 		cursor: pointer;
@@ -182,8 +280,11 @@
 	}
 
 	.sidebar-header {
-		padding: 16px 16px 12px;
+		padding: 16px 48px 12px 16px;
 		border-bottom: 1px solid var(--color-border, #e5e7eb);
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
 	}
 
 	:global(.dark) .sidebar-header {
@@ -203,10 +304,60 @@
 		color: rgb(156, 163, 175);
 	}
 
+	.sort-controls {
+		display: flex;
+		gap: 2px;
+		background: rgba(0, 0, 0, 0.05);
+		border-radius: 6px;
+		padding: 2px;
+		align-self: flex-start;
+	}
+
+	:global(.dark) .sort-controls {
+		background: rgba(255, 255, 255, 0.05);
+	}
+
+	.sort-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 26px;
+		border: none;
+		background: transparent;
+		color: rgb(107, 114, 128);
+		border-radius: 4px;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	:global(.dark) .sort-btn {
+		color: rgb(156, 163, 175);
+	}
+
+	.sort-btn:hover {
+		color: rgb(17, 24, 39);
+	}
+
+	:global(.dark) .sort-btn:hover {
+		color: rgb(243, 244, 246);
+	}
+
+	.sort-btn.active {
+		background: white;
+		color: rgb(147, 51, 234);
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+	}
+
+	:global(.dark) .sort-btn.active {
+		background: rgb(55, 65, 81);
+		color: rgb(168, 85, 247);
+	}
+
 	.projects-list {
 		flex: 1;
 		overflow-y: auto;
-		padding: 8px;
+		padding: 4px 8px 8px;
 	}
 
 	.loading,
@@ -224,6 +375,28 @@
 
 	.empty {
 		font-style: italic;
+	}
+
+	.group {
+		margin-bottom: 4px;
+	}
+
+	.group-heading {
+		font-size: 0.6875rem;
+		font-weight: 600;
+		color: rgb(156, 163, 175);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		padding: 10px 12px 4px;
+		position: sticky;
+		top: 0;
+		background: var(--color-bg-secondary, #f9fafb);
+		z-index: 1;
+	}
+
+	:global(.dark) .group-heading {
+		color: rgb(107, 114, 128);
+		background: rgb(31, 41, 55);
 	}
 
 	.project-item {

@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import '../app.css';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+	import RefreshButton from '$lib/components/RefreshButton.svelte';
 	import ProjectsSidebar from '$lib/components/ProjectsSidebar.svelte';
 	import { theme } from '$lib/stores/theme';
 
@@ -80,6 +81,7 @@
 			</a>
 
 			<div class="header-controls">
+				<RefreshButton />
 				<ThemeToggle />
 			</div>
 		</header>

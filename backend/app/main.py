@@ -1,4 +1,5 @@
 """Main FastAPI application."""
+import asyncio
 import logging
 import time
 import uuid
@@ -24,6 +25,21 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def periodic_reindex(interval_minutes: int):
+    """Background task that periodically re-indexes sessions."""
+    interval_seconds = interval_minutes * 60
+    logger.info(f"[App] Periodic re-indexing enabled every {interval_minutes} minutes")
+    while True:
+        await asyncio.sleep(interval_seconds)
+        logger.info("[App] Starting periodic re-index...")
+        try:
+            async with async_session() as db:
+                await index_all_sessions(db, force=False)
+            logger.info("[App] Periodic re-index complete")
+        except Exception:
+            logger.exception("[App] Periodic re-index failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
@@ -45,10 +61,25 @@ async def lifespan(app: FastAPI):
             logger.info("[App] Database is empty, starting initial indexing...")
             await index_all_sessions(db, force=False)
 
+    # Start periodic re-indexing background task
+    reindex_task = None
+    if settings.reindex_interval_minutes > 0:
+        reindex_task = asyncio.create_task(
+            periodic_reindex(settings.reindex_interval_minutes)
+        )
+
     elapsed_ms = int((time.monotonic() - start_time) * 1000)
     logger.info(f"[App] Startup complete ({elapsed_ms}ms)")
 
     yield
+
+    # Cancel periodic re-indexing on shutdown
+    if reindex_task is not None:
+        reindex_task.cancel()
+        try:
+            await reindex_task
+        except asyncio.CancelledError:
+            pass
 
     logger.info("[App] Shutting down Session Viewer API")
 

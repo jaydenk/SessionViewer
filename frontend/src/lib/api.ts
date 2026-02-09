@@ -9,7 +9,8 @@ import type {
 	Subagent,
 	AssociatedFile,
 	SessionFilters,
-	IndexStatus
+	IndexStatus,
+	ProjectInfo
 } from './types';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api';
@@ -103,8 +104,8 @@ export async function getSessionFiles(sessionId: string): Promise<AssociatedFile
 /**
  * Get list of unique projects
  */
-export async function getProjects(): Promise<string[]> {
-	return fetchAPI<string[]>('/sessions/projects/list');
+export async function getProjects(): Promise<ProjectInfo[]> {
+	return fetchAPI<ProjectInfo[]>('/sessions/projects/list');
 }
 
 /**

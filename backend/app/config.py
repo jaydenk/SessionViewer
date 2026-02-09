@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "sqlite+aiosqlite:///./data/sessions.db"
 
+    # Indexing
+    reindex_interval_minutes: int = 30  # 0 = disabled
+
     # Logging
     log_level: str = "INFO"
 
