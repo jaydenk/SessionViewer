@@ -17,6 +17,26 @@
 	let selectedProject = $state<string | null>(null);
 	let sortMode = $state<'alpha' | 'recent'>('alpha');
 
+	// Pinned projects state backed by localStorage
+	let pinnedProjects = $state<Set<string>>(new Set(
+		JSON.parse(localStorage.getItem('pinnedProjects') || '[]')
+	));
+
+	function togglePin(project: string) {
+		const next = new Set(pinnedProjects);
+		if (next.has(project)) {
+			next.delete(project);
+		} else {
+			next.add(project);
+		}
+		pinnedProjects = next;
+		localStorage.setItem('pinnedProjects', JSON.stringify([...next]));
+	}
+
+	function isPinned(project: string): boolean {
+		return pinnedProjects.has(project);
+	}
+
 	function getProjectName(projectPath: string): string {
 		if (projectPath === '(No Project)') return 'Ungrouped';
 		const parts = projectPath.split('/');
@@ -50,32 +70,46 @@
 	}
 
 	let groupedProjects = $derived.by((): ProjectGroup[] => {
-		const sorted = [...projects];
+		const pinned = projects
+			.filter(p => pinnedProjects.has(p.project))
+			.sort((a, b) => a.project.localeCompare(b.project));
+		const unpinned = projects.filter(p => !pinnedProjects.has(p.project));
+
+		let groups: ProjectGroup[] = [];
+
+		if (pinned.length > 0) {
+			groups.push({ label: 'Pinned', items: pinned });
+		}
+
+		const sorted = [...unpinned];
 
 		if (sortMode === 'recent') {
 			sorted.sort((a, b) => new Date(b.last_activity + 'Z').getTime() - new Date(a.last_activity + 'Z').getTime());
 			const bucketOrder = ['Today', 'Yesterday', 'This Week', 'This Month', 'This Year', 'Older'];
-			const groups = new Map<string, ProjectInfo[]>();
+			const buckets = new Map<string, ProjectInfo[]>();
 			for (const item of sorted) {
 				const bucket = getDateBucket(item.last_activity);
-				if (!groups.has(bucket)) groups.set(bucket, []);
-				groups.get(bucket)!.push(item);
+				if (!buckets.has(bucket)) buckets.set(bucket, []);
+				buckets.get(bucket)!.push(item);
 			}
-			return bucketOrder
-				.filter(b => groups.has(b))
-				.map(b => ({ label: b, items: groups.get(b)! }));
+			groups.push(...bucketOrder
+				.filter(b => buckets.has(b))
+				.map(b => ({ label: b, items: buckets.get(b)! })));
 		} else {
-			sorted.sort((a, b) => a.project.localeCompare(b.project));
-			const groups = new Map<string, ProjectInfo[]>();
+			sorted.sort((a, b) => getProjectName(a.project).localeCompare(getProjectName(b.project)));
+			const letterGroups = new Map<string, ProjectInfo[]>();
 			for (const item of sorted) {
 				const name = getProjectName(item.project);
 				const letter = name[0]?.toUpperCase() || '#';
 				const key = /[A-Z]/.test(letter) ? letter : '#';
-				if (!groups.has(key)) groups.set(key, []);
-				groups.get(key)!.push(item);
+				if (!letterGroups.has(key)) letterGroups.set(key, []);
+				letterGroups.get(key)!.push(item);
 			}
-			return Array.from(groups.entries()).map(([label, items]) => ({ label, items }));
+			const sortedEntries = Array.from(letterGroups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+			groups.push(...sortedEntries.map(([label, items]) => ({ label, items })));
 		}
+
+		return groups;
 	});
 
 	async function loadProjects() {
@@ -189,20 +223,36 @@
 						<div class="group">
 							<div class="group-heading">{group.label}</div>
 							{#each group.items as info (info.project)}
+								<!-- svelte-ignore a11y_no_static_element_interactions -->
+							<div
+								class="project-item"
+								class:active={selectedProject === info.project}
+								onclick={() => navigateToProject(info.project)}
+								onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigateToProject(info.project); } }}
+								role="button"
+								tabindex="0"
+							>
+								<div class="project-icon">
+									{#if info.project === '(No Project)'}
+										📂
+									{:else}
+										📁
+									{/if}
+								</div>
+								<div class="project-name">{getProjectName(info.project)}</div>
 								<button
-									class="project-item"
-									class:active={selectedProject === info.project}
-									onclick={() => navigateToProject(info.project)}
+									class="pin-btn"
+									class:pinned={isPinned(info.project)}
+									onclick={(e: MouseEvent) => { e.stopPropagation(); togglePin(info.project); }}
+									aria-label={isPinned(info.project) ? 'Unpin project' : 'Pin project'}
+									title={isPinned(info.project) ? 'Unpin' : 'Pin to top'}
 								>
-									<div class="project-icon">
-										{#if info.project === '(No Project)'}
-											📂
-										{:else}
-											📁
-										{/if}
-									</div>
-									<div class="project-name">{getProjectName(info.project)}</div>
+									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={isPinned(info.project) ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<path d="M12 17v5" />
+										<path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16h14v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 2-2H6a2 2 0 0 0 2 2 1 1 0 0 1 1 1z" />
+									</svg>
 								</button>
+							</div>
 							{/each}
 						</div>
 					{/each}
@@ -454,6 +504,44 @@
 
 	:global(.dark) .project-name {
 		color: rgb(243, 244, 246);
+	}
+
+	.pin-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		margin-left: auto;
+		flex-shrink: 0;
+		border: none;
+		background: transparent;
+		color: rgb(156, 163, 175);
+		border-radius: 4px;
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity 0.15s ease, color 0.15s ease;
+	}
+
+	.project-item:hover .pin-btn {
+		opacity: 1;
+	}
+
+	.pin-btn:hover {
+		color: rgb(107, 114, 128);
+	}
+
+	:global(.dark) .pin-btn:hover {
+		color: rgb(209, 213, 219);
+	}
+
+	.pin-btn.pinned {
+		opacity: 1;
+		color: rgb(147, 51, 234);
+	}
+
+	:global(.dark) .pin-btn.pinned {
+		color: rgb(168, 85, 247);
 	}
 
 	@media (max-width: 768px) {
