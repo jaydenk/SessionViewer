@@ -5,7 +5,7 @@
 	import { filters } from '$lib/stores/filters';
 	import SessionCard from '$lib/components/SessionCard.svelte';
 	import { debounce, renderMarkdown } from '$lib/utils';
-	import { getProjectFiles } from '$lib/api';
+	import { getProjectFiles, exportSessionsPdf } from '$lib/api';
 	import type { AssociatedFile } from '$lib/types';
 	import { fly } from 'svelte/transition';
 
@@ -13,6 +13,45 @@
 	let projectFiles = $state<AssociatedFile[]>([]);
 	let loadingProjectFiles = $state(false);
 	let selectedProjectFile = $state<AssociatedFile | null>(null);
+	let selectionMode = $state(false);
+	let selectedIds = $state<Set<string>>(new Set());
+	let exporting = $state(false);
+
+	function toggleSelectionMode() {
+		selectionMode = !selectionMode;
+		if (!selectionMode) {
+			selectedIds = new Set();
+		}
+	}
+
+	function toggleSession(id: string) {
+		const next = new Set(selectedIds);
+		if (next.has(id)) {
+			next.delete(id);
+		} else {
+			next.add(id);
+		}
+		selectedIds = next;
+	}
+
+	async function exportSelected() {
+		if (selectedIds.size === 0) return;
+		try {
+			exporting = true;
+			const blob = await exportSessionsPdf([...selectedIds]);
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `sessions_export_${selectedIds.size}.pdf`;
+			a.click();
+			URL.revokeObjectURL(url);
+		} catch (err) {
+			console.error('PDF export failed:', err);
+			alert('PDF export failed. Check console for details.');
+		} finally {
+			exporting = false;
+		}
+	}
 
 	// Sync URL params with filters
 	$effect(() => {
@@ -238,6 +277,14 @@
 			<p class="text-sm text-gray-600 dark:text-gray-400">
 				Showing {$sessions.data.sessions.length} of {$sessions.data.total} sessions
 			</p>
+			<button
+				onclick={toggleSelectionMode}
+				class="text-sm px-3 py-1.5 rounded-lg border transition-colors {selectionMode
+					? 'bg-primary-100 dark:bg-primary-900 border-primary-500 text-primary-700 dark:text-primary-300'
+					: 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}"
+			>
+				{selectionMode ? 'Cancel Selection' : 'Select for Export'}
+			</button>
 		</div>
 
 		{#if $sessions.data.sessions.length === 0}
@@ -250,7 +297,27 @@
 		{:else}
 			<div class="space-y-3">
 				{#each $sessions.data.sessions as session (session.id)}
-					<SessionCard {session} />
+					{#if selectionMode}
+						<div class="flex items-start gap-3">
+							<button
+								onclick={() => toggleSession(session.id)}
+								class="mt-4 flex-shrink-0 w-5 h-5 rounded border-2 transition-colors flex items-center justify-center {selectedIds.has(session.id)
+									? 'bg-primary-600 border-primary-600 text-white'
+									: 'border-gray-400 dark:border-gray-500 hover:border-primary-500'}"
+							>
+								{#if selectedIds.has(session.id)}
+									<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+										<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+									</svg>
+								{/if}
+							</button>
+							<div class="flex-1">
+								<SessionCard {session} />
+							</div>
+						</div>
+					{:else}
+						<SessionCard {session} />
+					{/if}
 				{/each}
 			</div>
 
@@ -287,6 +354,28 @@
 		{/if}
 	{/if}
 </div>
+
+<!-- Floating export bar -->
+{#if selectionMode && selectedIds.size > 0}
+	<div
+		class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-full shadow-xl px-6 py-3 flex items-center gap-4"
+		transition:fly={{ y: 60, duration: 200 }}
+	>
+		<span class="text-sm font-medium">{selectedIds.size} selected</span>
+		<button
+			onclick={exportSelected}
+			disabled={exporting}
+			class="inline-flex items-center gap-2 px-4 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-full text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+		>
+			{#if exporting}
+				<div class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+				Exporting...
+			{:else}
+				Export PDF
+			{/if}
+		</button>
+	</div>
+{/if}
 
 <!-- Slide-in project file viewer -->
 {#if selectedProjectFile}

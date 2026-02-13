@@ -20,7 +20,7 @@ export function renderMarkdown(content: string): string {
  * Format a date string for display
  */
 export function formatDate(dateStr: string): string {
-	const date = new Date(dateStr);
+	const date = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
 	const now = new Date();
 	const diffMs = now.getTime() - date.getTime();
 	const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -44,7 +44,7 @@ export function formatDate(dateStr: string): string {
  * Format relative time
  */
 export function formatRelativeTime(dateStr: string): string {
-	const date = new Date(dateStr);
+	const date = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
 	const now = new Date();
 	const diffMs = now.getTime() - date.getTime();
 	const diffSeconds = Math.floor(diffMs / 1000);

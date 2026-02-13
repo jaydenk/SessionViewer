@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { getSession, getSessionMessages, getSessionFiles } from '$lib/api';
+	import { getSession, getSessionMessages, getSessionFiles, exportSessionsPdf } from '$lib/api';
 	import { formatDate, renderMarkdown } from '$lib/utils';
 	import type { Session, Message, AssociatedFile } from '$lib/types';
 	import { fly } from 'svelte/transition';
@@ -12,8 +12,27 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let selectedArtifact = $state<AssociatedFile | null>(null);
+	let exporting = $state(false);
 
 	const sessionId = $page.params.id;
+
+	async function downloadPdf() {
+		try {
+			exporting = true;
+			const blob = await exportSessionsPdf([sessionId]);
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `${(session?.display || 'session').slice(0, 40)}.pdf`;
+			a.click();
+			URL.revokeObjectURL(url);
+		} catch (err) {
+			console.error('PDF export failed:', err);
+			alert('PDF export failed. Check console for details.');
+		} finally {
+			exporting = false;
+		}
+	}
 
 	onMount(async () => {
 		try {
@@ -291,13 +310,30 @@
 	</div>
 {:else if session}
 	<div class="max-w-4xl mx-auto px-4 py-8">
-		<!-- Back button -->
-		<a href="/" class="inline-flex items-center text-primary-600 hover:text-primary-700 mb-6">
-			<svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-			</svg>
-			Back to sessions
-		</a>
+		<!-- Back button and actions -->
+		<div class="flex items-center justify-between mb-6">
+			<a href="/" class="inline-flex items-center text-primary-600 hover:text-primary-700">
+				<svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+				</svg>
+				Back to sessions
+			</a>
+			<button
+				onclick={downloadPdf}
+				disabled={exporting}
+				class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+			>
+				{#if exporting}
+					<div class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+					Exporting...
+				{:else}
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+					</svg>
+					Download PDF
+				{/if}
+			</button>
+		</div>
 
 		<!-- Session header -->
 		<div class="card p-6 mb-6">

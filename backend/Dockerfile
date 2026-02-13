@@ -2,8 +2,16 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install curl for health checks
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# Install curl for health checks and WeasyPrint system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libharfbuzz0b \
+    libffi-dev \
+    libgdk-pixbuf-2.0-0 \
+    fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 COPY requirements.txt .

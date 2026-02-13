@@ -130,3 +130,21 @@ export async function refreshIndex(force: boolean = false): Promise<{ status: st
 		method: 'POST'
 	});
 }
+
+/**
+ * Export sessions as a combined PDF
+ */
+export async function exportSessionsPdf(sessionIds: string[]): Promise<Blob> {
+	const response = await fetch(`${API_BASE}/sessions/export/pdf`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ session_ids: sessionIds })
+	});
+
+	if (!response.ok) {
+		const error = await response.text();
+		throw new Error(`Export failed: ${response.status} ${error}`);
+	}
+
+	return response.blob();
+}

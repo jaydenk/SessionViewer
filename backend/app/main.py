@@ -11,7 +11,7 @@ from sqlalchemy import select, func
 
 from app.database import init_db, ping_db, async_session
 from app.config import settings
-from app.routers import sessions, messages, subagents, index
+from app.routers import sessions, messages, subagents, index, export
 from app.models import Session
 from app.services.indexer import index_all_sessions
 
@@ -137,6 +137,7 @@ app.include_router(sessions.router, prefix=settings.api_prefix)
 app.include_router(messages.router, prefix=settings.api_prefix)
 app.include_router(subagents.router, prefix=settings.api_prefix)
 app.include_router(index.router, prefix=settings.api_prefix)
+app.include_router(export.router, prefix=settings.api_prefix)
 
 
 # Health check endpoint
