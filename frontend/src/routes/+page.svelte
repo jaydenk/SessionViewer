@@ -121,7 +121,16 @@
 	}
 
 	function getProjectFileName(fileType: string): string {
-		return fileType.replace('project_', '');
+		const relativePath = fileType.replace('project_', '');
+		const parts = relativePath.split('/');
+		return parts[parts.length - 1];
+	}
+
+	function getProjectFileDir(fileType: string): string {
+		const relativePath = fileType.replace('project_', '');
+		const lastSlash = relativePath.lastIndexOf('/');
+		if (lastSlash === -1) return './';
+		return './' + relativePath.substring(0, lastSlash + 1);
 	}
 
 	function getFileIcon(fileType: string): string {
@@ -197,6 +206,7 @@
 					>
 						<span>{getFileIcon(file.file_type)}</span>
 						<span>{getProjectFileName(file.file_type)}</span>
+						<span class="text-xs opacity-60">{getProjectFileDir(file.file_type)}</span>
 					</button>
 				{/each}
 			</div>
@@ -399,6 +409,7 @@
 				<h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
 					{getFileIcon(selectedProjectFile.file_type)}
 					{getProjectFileName(selectedProjectFile.file_type)}
+					<span class="text-sm font-normal text-gray-500 dark:text-gray-400">{getProjectFileDir(selectedProjectFile.file_type)}</span>
 				</h2>
 				<button
 					onclick={closeProjectFile}

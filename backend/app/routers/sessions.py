@@ -157,16 +157,17 @@ async def get_project_files(
 
     files = []
 
-    # Find all .md files in the project directory (non-recursive for now)
-    for md_file in project_path.glob("*.md"):
+    # Find all .md files recursively in the project directory
+    for md_file in project_path.rglob("*.md"):
         if md_file.is_file():
             try:
                 content = md_file.read_text(encoding="utf-8")
+                relative_path = md_file.relative_to(project_path)
                 files.append(
                     AssociatedFileResponse(
                         id=str(md_file),
                         session_id="",  # Not tied to a specific session
-                        file_type=f"project_{md_file.name}",
+                        file_type=f"project_{relative_path}",
                         content=content,
                         file_path=str(md_file),
                     )
@@ -175,7 +176,7 @@ async def get_project_files(
                 logger.warning(f"Failed to read {md_file}: {e}")
                 continue
 
-    # Sort by filename
-    files.sort(key=lambda f: f.file_type)
+    # Sort by relative path (root files first, then subdirectories)
+    files.sort(key=lambda f: (f.file_type.count('/'), f.file_type))
 
     return files

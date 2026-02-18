@@ -10,7 +10,7 @@ A web UI for browsing your [Claude Code](https://docs.anthropic.com/en/docs/clau
   - Markdown-rendered text
   - Collapsible thinking/reasoning blocks
   - Collapsible tool calls with inputs and outputs
-- View project documentation (.md files) inline
+- View project documentation (.md files) inline, including from subdirectories
 - Session artifacts (TODO.md, plans, debug logs)
 - Token usage tracking per message
 - Dark/light mode
@@ -39,7 +39,7 @@ Copy `env.example` to `.env` and adjust as needed:
 | `PORT` | `3000` | Port to expose the web UI on |
 | `LOG_LEVEL` | `INFO` | Backend log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 
-`PROJECT_DIRS` lets the viewer display `.md` files (README, CLAUDE.md, TODO.md, etc.) from your project folders. Without it, session browsing still works but the project documentation panel will be empty.
+`PROJECT_DIRS` lets the viewer display `.md` files (README, CLAUDE.md, TODO.md, etc.) from your project folders, including files in subdirectories. Each file shows its relative path (e.g. `./`, `./docs/`) for easy identification. Without it, session browsing still works but the project documentation panel will be empty.
 
 ## Running Without Docker
 
