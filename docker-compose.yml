@@ -4,6 +4,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: session-viewer-backend
+    restart: unless-stopped
     volumes:
       - ./data:/app/data
       - ${CLAUDE_DIR:-~/.claude}:/mnt/claude:ro
@@ -26,6 +27,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: session-viewer-frontend
+    restart: unless-stopped
     ports:
       - "${PORT:-3000}:80"
     depends_on:
